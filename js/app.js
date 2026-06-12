@@ -3,10 +3,11 @@
 
 /* ---- app state ---- */
 let state = {
-  view:'applications',
-  search:'',
-  filters:{ status:'', source:'', company:'' },
-  sort:{ key:'dateApplied', dir:'desc' },
+  view: 'applications',
+  search: '',
+  filters: { status: '', source: '', company: '', needsFollowUp: false },
+  sort: { key: 'dateApplied', dir: 'desc' },
+  expandedRows: new Set(),
 };
 
 /* ============================================================
@@ -14,13 +15,14 @@ let state = {
    ============================================================ */
 function visibleRows(){
   const q = state.search.trim().toLowerCase();
-  const { status, source, company } = state.filters;
+  const { status, source, company, needsFollowUp: nfu } = state.filters;
   let rows = Store.getAll().filter(a => {
     if(status && a.status !== status) return false;
     if(source && a.howApplied !== source) return false;
     if(company && a.company !== company) return false;
+    if(nfu && !needsFollowUp(a)) return false;
     if(q){
-      const hay = [a.company,a.role,a.location,a.contactName,a.contactInfo,a.notes,a.howApplied,a.status]
+      const hay = [a.company,a.role,a.location,a.contactName,a.contactEmail,a.contactPhone,a.contactInfo,a.notes,a.howApplied,a.status]
         .join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
@@ -68,11 +70,11 @@ function colHead(key,label){
 function renderApplications(){
   const all = Store.getAll();
   const rows = visibleRows();
-  const filtersActive = state.search || state.filters.status || state.filters.source || state.filters.company;
-
-  const companies = [...new Set(all.map(a=>a.company).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const { status, source, company, needsFollowUp: nfu } = state.filters;
+  const filtersActive = state.search || status || source || company || nfu;
   const needCount = all.filter(needsFollowUp).length;
 
+  const companies = [...new Set(all.map(a=>a.company).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const statusOpts = `<option value="">All statuses</option>` + STATUSES.map(s=>`<option ${state.filters.status===s.value?'selected':''}>${s.value}</option>`).join('');
   const sourceOpts = `<option value="">All sources</option>` + SOURCES.map(s=>`<option ${state.filters.source===s?'selected':''}>${s}</option>`).join('');
   const companyOpts = `<option value="">All companies</option>` + companies.map(c=>`<option ${state.filters.company===c?'selected':''}>${esc(c)}</option>`).join('');
@@ -89,16 +91,16 @@ function renderApplications(){
         ${colHead('company','Company')}
         ${colHead('status','Status')}
         ${colHead('dateApplied','Applied')}
-        ${colHead('daysSince','Days')}
-        ${colHead('howApplied','Source')}
         <th>Follow-up</th>
-        ${colHead('nextFollowUpDate','Next')}
-        <th>Contact</th>
-        <th style="text-align:right">Actions</th>
+        <th></th>
       </tr></thead>
       <tbody>${rows.map(rowHTML).join('')}</tbody>
     </table></div></div>`;
   }
+
+  const filterPill = nfu
+    ? `<span class="filter-pill">Needs follow-up <button onclick="clearNfuFilter()" aria-label="Remove filter">×</button></span>`
+    : '';
 
   return `
     <div class="view-head">
@@ -115,9 +117,15 @@ function renderApplications(){
       <div class="selectwrap"><select id="filterStatus">${statusOpts}</select></div>
       <div class="selectwrap"><select id="filterSource">${sourceOpts}</select></div>
       <div class="selectwrap"><select id="filterCompany">${companyOpts}</select></div>
+      ${filterPill}
       ${filtersActive?`<button class="btn btn-sm clearfilters" id="clearFilters">Clear filters</button>`:''}
     </div>
     ${body}`;
+}
+
+function clearNfuFilter(){
+  state.filters.needsFollowUp = false;
+  render();
 }
 
 function rowHTML(a){
@@ -126,6 +134,7 @@ function rowHTML(a){
   const stale = days !== null && days >= 14 && a.status === 'Applied';
   const fu = followUpState(a);
   const overdue = needsFollowUp(a);
+  const isOpen = state.expandedRows.has(a.id);
 
   const cadenceMap = {
     due:   {cls:'due',  text: a.nextFollowUpDate ? `Overdue · ${fmtShort(a.nextFollowUpDate)}` : 'Overdue'},
@@ -138,33 +147,64 @@ function rowHTML(a){
   const cad = cadenceMap[fu];
   const fuCount = (+a.followUpCount||0);
 
-  return `<tr class="${overdue?'overdue':''}" style="--rail:${meta.color}">
+  /* backward-compat: old records stored a single contactInfo field */
+  const email = a.contactEmail || (!a.contactPhone && a.contactInfo && a.contactInfo.includes('@') ? a.contactInfo : '');
+  const phone = a.contactPhone || (!a.contactEmail && a.contactInfo && !a.contactInfo.includes('@') ? a.contactInfo : '');
+
+  const mainRow = `<tr id="row-${a.id}" class="row-compact${overdue?' overdue':''}${isOpen?' expanded':''}" style="--rail:${meta.color}" onclick="toggleRow('${a.id}')">
     <td class="td-head" data-label="Company">
-      <div>
-        <div class="company">${esc(a.company)||'—'}</div>
-        <div class="role-muted">${esc(a.role)||'—'}${a.location?` · ${esc(a.location)}`:''}</div>
-      </div>
+      <div class="company">${esc(a.company)||'—'}</div>
+      <div class="role-muted">${esc(a.role)||'—'}${a.location?` · <span class="loc">${esc(a.location)}</span>`:''}</div>
     </td>
     <td data-label="Status"><span class="badge ${meta.cls}"><span class="dot"></span>${esc(a.status)}</span></td>
-    <td data-label="Applied" class="tnum">${fmtDate(a.dateApplied)}</td>
-    <td data-label="Days"><span class="days-chip tnum ${stale?'stale':''}">${days===null?'—':days+'d'}</span></td>
-    <td data-label="Source"><span class="src-pill">${esc(a.howApplied)||'—'}</span></td>
+    <td data-label="Applied" class="tnum">
+      <span class="days-chip ${stale?'stale':''}">${days===null?'—':days+'d'}</span>
+      <div class="small">${fmtDate(a.dateApplied)}</div>
+    </td>
     <td data-label="Follow-up">
       <span class="cadence ${cad.cls}"><span class="glyph"></span>${cad.text}</span>
-      ${fuCount>0?`<div class="small tnum">${fuCount} sent${a.lastFollowUpDate?` · last ${fmtShort(a.lastFollowUpDate)}`:''}</div>`:''}
-    </td>
-    <td data-label="Next" class="tnum">${a.nextFollowUpDate?fmtDate(a.nextFollowUpDate):'—'}</td>
-    <td data-label="Contact">
-      ${a.contactName?`<div class="cell-strong">${esc(a.contactName)}</div>`:'<span class="small">—</span>'}
-      ${a.contactInfo?`<div class="small">${esc(a.contactInfo)}</div>`:''}
+      ${fuCount>0?`<div class="small tnum">${fuCount} sent</div>`:''}
     </td>
     <td data-label="Actions">
       <div class="rowactions">
-        <button class="iconbtn" title="Edit" onclick="openForm('${a.id}')"><svg class="ic"><use href="#i-edit"/></svg></button>
-        <button class="iconbtn del" title="Delete" onclick="askDelete('${a.id}')"><svg class="ic"><use href="#i-trash"/></svg></button>
+        <button class="iconbtn expand-btn" title="${isOpen?'Collapse':'Expand'}" aria-expanded="${isOpen}">
+          <svg class="ic expand-ic${isOpen?' open':''}"><use href="#i-chevron"/></svg>
+        </button>
+        <button class="iconbtn" title="Edit" onclick="event.stopPropagation();openForm('${a.id}')"><svg class="ic"><use href="#i-edit"/></svg></button>
+        <button class="iconbtn del" title="Delete" onclick="event.stopPropagation();askDelete('${a.id}')"><svg class="ic"><use href="#i-trash"/></svg></button>
       </div>
     </td>
   </tr>`;
+
+  const detailItems = [
+    a.howApplied   ? `<div class="detail-item"><div class="dl">Source</div><div class="dv">${esc(a.howApplied)}</div></div>` : '',
+    a.contactName  ? `<div class="detail-item"><div class="dl">Contact</div><div class="dv">${esc(a.contactName)}</div></div>` : '',
+    email          ? `<div class="detail-item"><div class="dl">Email</div><div class="dv"><a href="mailto:${esc(email)}" onclick="event.stopPropagation()">${esc(email)}</a></div></div>` : '',
+    phone          ? `<div class="detail-item"><div class="dl">Phone</div><div class="dv"><a href="tel:${esc(phone)}" onclick="event.stopPropagation()">${esc(phone)}</a></div></div>` : '',
+    a.nextFollowUpDate ? `<div class="detail-item"><div class="dl">Next follow-up</div><div class="dv">${fmtDate(a.nextFollowUpDate)}</div></div>` : '',
+    a.lastFollowUpDate ? `<div class="detail-item"><div class="dl">Last follow-up</div><div class="dv">${fmtDate(a.lastFollowUpDate)}${fuCount>0?` · ${fuCount} sent`:''}</div></div>` : '',
+    a.notes        ? `<div class="detail-item detail-notes"><div class="dl">Notes</div><div class="dv">${esc(a.notes)}</div></div>` : '',
+  ].filter(Boolean).join('');
+
+  const detailRow = `<tr id="detail-${a.id}" class="row-detail${isOpen?' open':''}">
+    <td colspan="5"><div class="detail-grid">${detailItems}</div></td>
+  </tr>`;
+
+  return mainRow + detailRow;
+}
+
+function toggleRow(id){
+  const mainRow = document.getElementById('row-' + id);
+  const detailRow = document.getElementById('detail-' + id);
+  if(!mainRow || !detailRow) return;
+  const isOpen = detailRow.classList.toggle('open');
+  mainRow.classList.toggle('expanded', isOpen);
+  const ic = mainRow.querySelector('.expand-ic');
+  if(ic) ic.classList.toggle('open', isOpen);
+  const btn = mainRow.querySelector('.expand-btn');
+  if(btn) btn.setAttribute('aria-expanded', isOpen);
+  if(isOpen) state.expandedRows.add(id);
+  else state.expandedRows.delete(id);
 }
 
 function emptyState(kind){
@@ -216,23 +256,26 @@ function renderDashboard(){
   const interviewing = sched + conducted;
 
   const stats = [
-    {label:'Total applications', num:total, meta:'all-time', accent:'var(--brand)'},
-    {label:'Active interviews', num:interviewing, meta:`${sched} scheduled · ${conducted} conducted`, accent:'var(--conducted-fg)'},
-    {label:'Rejections', num:rejected, meta: total?`${Math.round(rejected/total*100)}% of total`:'—', accent:'var(--rejected-fg)'},
-    {label:'Need follow-up', num:needFU, meta: needFU?'due today or overdue':'all caught up', accent:'var(--danger)', alert: needFU>0, icon:'i-bell'},
-    {label:'Interviews scheduled', num:sched, meta:'upcoming', accent:'var(--sched-fg)'},
-    {label:'Interviews conducted', num:conducted, meta:'completed', accent:'var(--conducted-fg)'},
-    {label:'Avg days since applying', num: isNaN(avgDays)?'—':avgDays, meta:'across all applications', accent:'var(--brand)'},
-    {label:'Applied (status)', num:byStatus['Applied'], meta:'awaiting response', accent:'var(--applied-fg)'},
+    {label:'Total applications',     num:total,        meta:'all-time',                                     accent:'var(--brand)',        action:`dashStatus('')`},
+    {label:'Active interviews',       num:interviewing, meta:`${sched} scheduled · ${conducted} conducted`,  accent:'var(--conducted-fg)', action:`dashStatus('Interview Scheduled')`},
+    {label:'Rejections',              num:rejected,     meta:total?`${Math.round(rejected/total*100)}% of total`:'—', accent:'var(--rejected-fg)', action:`dashStatus('Rejected')`},
+    {label:'Need follow-up',          num:needFU,       meta:needFU?'due today or overdue':'all caught up',  accent:'var(--danger)',       action:`dashFollowUp()`, alert:needFU>0, icon:'i-bell'},
+    {label:'Interviews scheduled',    num:sched,        meta:'upcoming',                                     accent:'var(--sched-fg)',     action:`dashStatus('Interview Scheduled')`},
+    {label:'Interviews conducted',    num:conducted,    meta:'completed',                                    accent:'var(--conducted-fg)', action:`dashStatus('Interview Conducted')`},
+    {label:'Avg days since applying', num:isNaN(avgDays)?'—':avgDays, meta:'across all applications',       accent:'var(--brand)'},
+    {label:'Applied (status)',        num:byStatus['Applied'], meta:'awaiting response',                     accent:'var(--applied-fg)',   action:`dashStatus('Applied')`},
   ];
 
-  const statCards = stats.map(s=>`
-    <div class="stat ${s.alert?'alert':''}" style="--accent:${s.accent}">
+  const statCards = stats.map(s=>{
+    const tag = s.action ? 'button' : 'div';
+    const onclick = s.action ? ` onclick="${s.action}"` : '';
+    return `<${tag} class="stat${s.alert?' alert':''}"${onclick} style="--accent:${s.accent}">
       <span class="tick"></span>
-      <div class="label">${s.icon?`<svg class="ic" style="width:14px;height:14px;color:${s.accent}"><use href="#${s.icon}"/></svg>`:''}${s.label}</div>
+      <div class="label">${s.icon?`<svg class="ic" style="width:14px;height:14px;color:${s.accent}"><use href="#${s.icon}"/></svg>`:''}${s.label}${s.action?'<svg class="ic stat-arrow"><use href="#i-chevron"/></svg>':''}</div>
       <div class="num tnum">${s.num}</div>
       <div class="meta">${s.meta}</div>
-    </div>`).join('');
+    </${tag}>`;
+  }).join('');
 
   /* pipeline segmented bar */
   const pipeSegs = STATUSES.map(s=>{
@@ -268,10 +311,22 @@ function renderDashboard(){
         <div class="body"><div class="hbars">${srcBars}</div></div>
       </div>
       <div class="panel panel-wide">
-        <h3>Applications submitted by week <span class="hint">most recent ${'\u2192'}</span></h3>
+        <h3>Applications submitted by week <span class="hint">most recent ${'→'}</span></h3>
         <div class="body">${weeklyChart(all)}</div>
       </div>
     </div>`;
+}
+
+/* dashboard filter helpers — must be function declarations for onclick */
+function dashFollowUp(){ filterToView({needsFollowUp:true}); }
+function dashStatus(s){ filterToView({status:s}); }
+
+function filterToView(patch){
+  state.view = 'applications';
+  state.filters = { status:'', source:'', company:'', needsFollowUp:false, ...patch };
+  state.search = '';
+  render();
+  window.scrollTo({top:0, behavior:'smooth'});
 }
 
 /* weekly columns as inline SVG (no dependencies) */
@@ -279,7 +334,6 @@ function weeklyChart(all){
   const dates = all.map(a=>parseDate(a.dateApplied)).filter(Boolean);
   if(dates.length === 0) return `<p style="color:var(--muted)">No dated applications yet.</p>`;
 
-  // bucket by week (Monday start)
   const mondayOf = (d)=>{ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; };
   const buckets = {};
   dates.forEach(d=>{ const k=mondayOf(d).getTime(); buckets[k]=(buckets[k]||0)+1; });
@@ -289,14 +343,13 @@ function weeklyChart(all){
   const series = [];
   for(let i=WEEKS-1;i>=0;i--){
     const wk = new Date(last); wk.setDate(wk.getDate()-i*7);
-    const k = wk.getTime();
-    series.push({ date:wk, n: buckets[k]||0 });
+    series.push({ date:wk, n: buckets[wk.getTime()]||0 });
   }
   const max = Math.max(1, ...series.map(s=>s.n));
 
-  const W=720, H=200, padL=26, padB=26, padT=10, padR=8;
+  const W=720, H=220, padL=26, padB=30, padT=28, padR=8;
   const cw = (W-padL-padR)/series.length;
-  const bw = Math.min(40, cw*0.6);
+  const bw = Math.min(44, cw*0.62);
   const chartH = H-padB-padT;
 
   const bars = series.map((s,i)=>{
@@ -305,10 +358,12 @@ function weeklyChart(all){
     const y = padT + (chartH-h);
     const label = `${s.date.getMonth()+1}/${s.date.getDate()}`;
     return `
-      <rect class="col" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="4">
+      <rect class="col" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="5">
         <title>Week of ${label}: ${s.n}</title></rect>
-      ${s.n>0?`<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${s.n}</text>`:''}
-      <text x="${(x+bw/2).toFixed(1)}" y="${H-9}" text-anchor="middle">${label}</text>`;
+      ${s.n>0?`
+        <rect x="${(x+bw/2-11).toFixed(1)}" y="${(y-20).toFixed(1)}" width="22" height="17" rx="4" fill="var(--ink)" opacity=".85"/>
+        <text x="${(x+bw/2).toFixed(1)}" y="${(y-7).toFixed(1)}" text-anchor="middle" style="fill:#fff;font-size:11px;font-weight:700">${s.n}</text>`:''}
+      <text x="${(x+bw/2).toFixed(1)}" y="${H-8}" text-anchor="middle" style="font-size:10.5px">${label}</text>`;
   }).join('');
 
   return `<svg class="weekly" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Applications submitted per week">
@@ -322,9 +377,7 @@ function weeklyChart(all){
    ============================================================ */
 function wireToolbar(){
   const si = document.getElementById('searchInput');
-  if(si){
-    si.oninput = (e)=>{ state.search = e.target.value; rerenderTablePreserveFocus(); };
-  }
+  if(si) si.oninput = (e)=>{ state.search = e.target.value; rerenderTablePreserveFocus(); };
   const fs = document.getElementById('filterStatus');
   if(fs) fs.onchange = (e)=>{ state.filters.status = e.target.value; render(); };
   const fsrc = document.getElementById('filterSource');
@@ -344,7 +397,6 @@ function wireToolbar(){
   });
 }
 
-/* keep search focus/caret while live-filtering */
 function rerenderTablePreserveFocus(){
   const si = document.getElementById('searchInput');
   const caret = si ? si.selectionStart : null;
@@ -354,7 +406,7 @@ function rerenderTablePreserveFocus(){
 }
 
 function resetFilters(){
-  state.search=''; state.filters={status:'',source:'',company:''};
+  state.search=''; state.filters={status:'',source:'',company:'',needsFollowUp:false};
   render();
 }
 
@@ -385,7 +437,12 @@ function openForm(id){
   set('f-lastfu', a?a.lastFollowUpDate:'');
   set('f-nextfu', a?a.nextFollowUpDate:'');
   set('f-contactname', a?a.contactName:'');
-  set('f-contactinfo', a?a.contactInfo:'');
+
+  /* backward-compat: migrate old single contactInfo into email or phone */
+  const oldInfo = a?.contactInfo || '';
+  set('f-contactemail', a?.contactEmail ?? (oldInfo.includes('@') ? oldInfo : ''));
+  set('f-contactphone', a?.contactPhone ?? (!oldInfo.includes('@') ? oldInfo : ''));
+
   set('f-notes', a?a.notes:'');
 
   document.querySelectorAll('#appForm .field').forEach(f=>f.classList.remove('invalid'));
@@ -409,18 +466,19 @@ function submitForm(){
   const record = {
     id: editingId || uid(),
     company, role,
-    location: v('f-location'),
-    status: document.getElementById('f-status').value,
-    dateApplied: v('f-date') || todayISO(),
-    howApplied: document.getElementById('f-source').value,
-    followUpCount: Math.max(0, parseInt(document.getElementById('f-fucount').value||'0',10) || 0),
+    location:       v('f-location'),
+    status:         document.getElementById('f-status').value,
+    dateApplied:    v('f-date') || todayISO(),
+    howApplied:     document.getElementById('f-source').value,
+    followUpCount:  Math.max(0, parseInt(document.getElementById('f-fucount').value||'0',10) || 0),
     lastFollowUpDate: v('f-lastfu'),
     nextFollowUpDate: v('f-nextfu'),
-    contactName: v('f-contactname'),
-    contactInfo: v('f-contactinfo'),
-    notes: v('f-notes'),
-    createdAt: base?.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    contactName:    v('f-contactname'),
+    contactEmail:   v('f-contactemail'),
+    contactPhone:   v('f-contactphone'),
+    notes:          v('f-notes'),
+    createdAt:      base?.createdAt || new Date().toISOString(),
+    updatedAt:      new Date().toISOString(),
   };
   Store.save(record);
   closeForm();
@@ -428,7 +486,6 @@ function submitForm(){
   toast(editingId ? 'Application updated' : 'Application added');
 }
 
-/* submit on Enter (except inside textarea) */
 document.getElementById('appForm').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' && e.target.tagName !== 'TEXTAREA'){ e.preventDefault(); submitForm(); }
 });
@@ -452,7 +509,7 @@ function askDelete(id){
 function closeConfirm(){ closeScrim('confirmScrim'); pendingDelete=null; }
 
 /* ============================================================
-   data: export / import / sample / clear
+   data: export / import / share / sample / clear
    ============================================================ */
 function exportData(){
   const data = JSON.stringify(Store.getAll(), null, 2);
@@ -463,6 +520,7 @@ function exportData(){
   a.click(); URL.revokeObjectURL(url);
   toast('Exported your data');
 }
+
 function importData(){ document.getElementById('importFile').click(); }
 document.getElementById('importFile').addEventListener('change', (e)=>{
   const file = e.target.files[0]; if(!file) return;
@@ -480,6 +538,21 @@ document.getElementById('importFile').addEventListener('change', (e)=>{
   reader.readAsText(file);
 });
 
+async function shareData(){
+  const data = Store.getAll();
+  if(!data.length){ toast('Nothing to share yet'); return; }
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const file = new File([blob], `cadence-${todayISO()}.json`, {type:'application/json'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title:'Cadence Applications', text:`${data.length} job application${data.length===1?'':'s'}`});
+      return;
+    }catch(e){ if(e.name==='AbortError') return; }
+  }
+  exportData();
+}
+
 function clearAll(){
   if(Store.getAll().length === 0){ toast('Nothing to clear'); return; }
   document.getElementById('confirmTitle').textContent = 'Clear all data';
@@ -491,17 +564,16 @@ function clearAll(){
 }
 
 function loadSample(){
-  const t = todayISO();
   const offset = (days)=>{ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); };
   const sample = [
-    {company:'Northwind Studio', role:'Senior Product Designer', location:'Remote', status:'Interview Scheduled', dateApplied:offset(-9), howApplied:'LinkedIn', followUpCount:1, lastFollowUpDate:offset(-3), nextFollowUpDate:offset(1), contactName:'Priya Anand', contactInfo:'priya@northwind.co', notes:'Portfolio review Tuesday. Loved the case studies.'},
-    {company:'Lumen Analytics', role:'UX Researcher', location:'Chicago, IL', status:'Interview Conducted', dateApplied:offset(-21), howApplied:'Referral', followUpCount:2, lastFollowUpDate:offset(-2), nextFollowUpDate:offset(4), contactName:'Marcus Lee', contactInfo:'(312) 555-0148', notes:'Panel went well. Waiting on team decision.'},
-    {company:'Brightpath Health', role:'Design Lead', location:'Remote · US', status:'Applied', dateApplied:offset(-2), howApplied:'Company Website', followUpCount:0, lastFollowUpDate:'', nextFollowUpDate:offset(5), contactName:'', contactInfo:'', notes:''},
-    {company:'Cobalt Robotics', role:'Product Designer', location:'San Mateo, CA', status:'Applied', dateApplied:offset(-16), howApplied:'Indeed', followUpCount:1, lastFollowUpDate:offset(-9), nextFollowUpDate:offset(-2), contactName:'Dana Ortiz', contactInfo:'dana.ortiz@cobalt.io', notes:'Follow-up overdue — ping recruiter.'},
-    {company:'Fernpost', role:'Senior UX Designer', location:'Austin, TX', status:'Rejected', dateApplied:offset(-34), howApplied:'LinkedIn', followUpCount:1, lastFollowUpDate:offset(-20), nextFollowUpDate:'', contactName:'', contactInfo:'', notes:'Role put on hold. Reconnect next quarter.'},
-    {company:'Atlas Freight', role:'Design Systems Designer', location:'Remote', status:'Applied', dateApplied:offset(-5), howApplied:'Recruiter', followUpCount:0, lastFollowUpDate:'', nextFollowUpDate:offset(2), contactName:'Sam Whitfield', contactInfo:'sam@atlasrecruiting.com', notes:'Recruiter reached out first.'},
-    {company:'Meridian Bank', role:'UX/UI Designer', location:'New York, NY', status:'Interview Scheduled', dateApplied:offset(-12), howApplied:'Monster', followUpCount:1, lastFollowUpDate:offset(-1), nextFollowUpDate:offset(0), contactName:'Renee Park', contactInfo:'rpark@meridian.com', notes:'First round Thursday 2pm.'},
-    {company:'Sproutly', role:'Product Designer (Growth)', location:'Remote', status:'Applied', dateApplied:offset(-27), howApplied:'Other', followUpCount:0, lastFollowUpDate:'', nextFollowUpDate:'', contactName:'', contactInfo:'', notes:'Applied via AngelList.'},
+    {company:'Northwind Studio',  role:'Senior Product Designer', location:'Remote',          status:'Interview Scheduled', dateApplied:offset(-9),  howApplied:'LinkedIn',        followUpCount:1, lastFollowUpDate:offset(-3), nextFollowUpDate:offset(1),  contactName:'Priya Anand',   contactEmail:'priya@northwind.co',  contactPhone:'',              notes:'Portfolio review Tuesday. Loved the case studies.'},
+    {company:'Lumen Analytics',   role:'UX Researcher',           location:'Chicago, IL',     status:'Interview Conducted', dateApplied:offset(-21), howApplied:'Referral',        followUpCount:2, lastFollowUpDate:offset(-2), nextFollowUpDate:offset(4),  contactName:'Marcus Lee',    contactEmail:'',                   contactPhone:'(312) 555-0148', notes:'Panel went well. Waiting on team decision.'},
+    {company:'Brightpath Health',  role:'Design Lead',             location:'Remote · US',     status:'Applied',             dateApplied:offset(-2),  howApplied:'Company Website', followUpCount:0, lastFollowUpDate:'',         nextFollowUpDate:offset(5),  contactName:'',              contactEmail:'',                   contactPhone:'',              notes:''},
+    {company:'Cobalt Robotics',   role:'Product Designer',        location:'San Mateo, CA',   status:'Applied',             dateApplied:offset(-16), howApplied:'Indeed',          followUpCount:1, lastFollowUpDate:offset(-9), nextFollowUpDate:offset(-2), contactName:'Dana Ortiz',    contactEmail:'dana.ortiz@cobalt.io',contactPhone:'',             notes:'Follow-up overdue — ping recruiter.'},
+    {company:'Fernpost',          role:'Senior UX Designer',      location:'Austin, TX',      status:'Rejected',            dateApplied:offset(-34), howApplied:'LinkedIn',        followUpCount:1, lastFollowUpDate:offset(-20),nextFollowUpDate:'',         contactName:'',              contactEmail:'',                   contactPhone:'',              notes:'Role put on hold. Reconnect next quarter.'},
+    {company:'Atlas Freight',     role:'Design Systems Designer', location:'Remote',          status:'Applied',             dateApplied:offset(-5),  howApplied:'Recruiter',       followUpCount:0, lastFollowUpDate:'',         nextFollowUpDate:offset(2),  contactName:'Sam Whitfield', contactEmail:'sam@atlasrecruiting.com', contactPhone:'',         notes:'Recruiter reached out first.'},
+    {company:'Meridian Bank',     role:'UX/UI Designer',          location:'New York, NY',    status:'Interview Scheduled', dateApplied:offset(-12), howApplied:'Monster',         followUpCount:1, lastFollowUpDate:offset(-1), nextFollowUpDate:offset(0),  contactName:'Renee Park',    contactEmail:'rpark@meridian.com', contactPhone:'',              notes:'First round Thursday 2pm.'},
+    {company:'Sproutly',          role:'Product Designer (Growth)',location:'Remote',         status:'Applied',             dateApplied:offset(-27), howApplied:'Other',           followUpCount:0, lastFollowUpDate:'',         nextFollowUpDate:'',         contactName:'',              contactEmail:'',                   contactPhone:'',              notes:'Applied via AngelList.'},
   ].map(s=>({ id:uid(), createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(), ...s }));
 
   if(Store.getAll().length > 0){
@@ -543,7 +615,6 @@ function closeScrim(id){
   document.body.style.overflow='';
   if(lastFocused) try{ lastFocused.focus(); }catch{}
 }
-/* click-outside + Esc close */
 ['formScrim','confirmScrim'].forEach(id=>{
   document.getElementById(id).addEventListener('mousedown', (e)=>{ if(e.target.id===id) closeScrim(id); });
 });

@@ -30,6 +30,8 @@
     <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></symbol>
   </defs>
 </svg>
 
@@ -56,6 +58,7 @@
         <svg class="ic"><use href="#i-dots"/></svg>
       </button>
       <div class="menu" id="overflowMenu" role="menu">
+        <button role="menuitem" onclick="closeMenu();shareData()"><svg class="ic"><use href="#i-share"/></svg> Share data</button>
         <button role="menuitem" onclick="closeMenu();exportData()"><svg class="ic"><use href="#i-down"/></svg> Export data (.json)</button>
         <button role="menuitem" onclick="closeMenu();importData()"><svg class="ic"><use href="#i-up"/></svg> Import data (.json)</button>
         <button role="menuitem" onclick="closeMenu();loadSample()"><svg class="ic"><use href="#i-spark"/></svg> Load sample data</button>
@@ -120,9 +123,13 @@
         <label for="f-contactname">Contact name</label>
         <input id="f-contactname" autocomplete="off" placeholder="e.g. Jordan Mills" />
       </div>
-      <div class="field full">
-        <label for="f-contactinfo">Contact information</label>
-        <input id="f-contactinfo" autocomplete="off" placeholder="Email or phone" />
+      <div class="field">
+        <label for="f-contactemail">Contact email</label>
+        <input id="f-contactemail" type="email" autocomplete="off" placeholder="name@company.com" />
+      </div>
+      <div class="field">
+        <label for="f-contactphone">Contact phone</label>
+        <input id="f-contactphone" type="tel" autocomplete="off" placeholder="(555) 000-0000" />
       </div>
       <div class="field full">
         <label for="f-notes">Notes</label>
