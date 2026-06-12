@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cadence — Job Application Tracker</title>
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<meta name="theme-color" content="#1F6B4F" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><line x1="10" y1="11" x2="10" y2="16"/><line x1="14" y1="11" x2="14" y2="16"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 13l5-5 5 5"/><path d="M5 3h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#" onclick="return false">
+      <span class="mark"></span>
+      <span class="name">Ca<b>dence</b></span>
+    </a>
+    <nav class="seg" role="tablist" aria-label="Views">
+      <button id="tab-apps" role="tab" aria-pressed="true" onclick="setView('applications')">
+        <svg class="ic"><use href="#i-list"/></svg> Applications
+      </button>
+      <button id="tab-dash" role="tab" aria-pressed="false" onclick="setView('dashboard')">
+        <svg class="ic"><use href="#i-grid"/></svg> Dashboard
+      </button>
+    </nav>
+    <div class="topbar-spacer"></div>
+    <button class="btn btn-primary" onclick="openForm()">
+      <svg class="ic"><use href="#i-plus"/></svg> Add application
+    </button>
+    <div class="overflow">
+      <button class="btn btn-ghost" id="overflowBtn" aria-haspopup="true" aria-expanded="false" onclick="toggleMenu(event)" title="More">
+        <svg class="ic"><use href="#i-dots"/></svg>
+      </button>
+      <div class="menu" id="overflowMenu" role="menu">
+        <button role="menuitem" onclick="closeMenu();exportData()"><svg class="ic"><use href="#i-down"/></svg> Export data (.json)</button>
+        <button role="menuitem" onclick="closeMenu();importData()"><svg class="ic"><use href="#i-up"/></svg> Import data (.json)</button>
+        <button role="menuitem" onclick="closeMenu();loadSample()"><svg class="ic"><use href="#i-spark"/></svg> Load sample data</button>
+        <div class="sep"></div>
+        <button role="menuitem" class="danger" onclick="closeMenu();clearAll()"><svg class="ic"><use href="#i-trash"/></svg> Clear all data</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="main"><!-- rendered --></main>
+<div class="footer-note" id="footerNote"></div>
+
+<!-- Add / edit modal -->
+<div class="scrim" id="formScrim" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <header>
+      <h3 id="formTitle">Add application</h3>
+      <button class="iconbtn" onclick="closeForm()" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <form class="form" id="appForm" novalidate>
+      <input type="hidden" id="f-id" />
+      <div class="field">
+        <label for="f-company">Company <span class="req">*</span></label>
+        <input id="f-company" autocomplete="off" placeholder="e.g. Northwind" />
+        <span class="err">Add a company name.</span>
+      </div>
+      <div class="field">
+        <label for="f-role">Role <span class="req">*</span></label>
+        <input id="f-role" autocomplete="off" placeholder="e.g. Product Designer" />
+        <span class="err">Add a role title.</span>
+      </div>
+      <div class="field">
+        <label for="f-location">Location</label>
+        <input id="f-location" autocomplete="off" placeholder="e.g. Remote · Chicago, IL" />
+      </div>
+      <div class="field">
+        <label for="f-status">Status</label>
+        <div class="selectwrap-f"><select id="f-status"></select></div>
+      </div>
+      <div class="field">
+        <label for="f-date">Date applied</label>
+        <input id="f-date" type="date" />
+      </div>
+      <div class="field">
+        <label for="f-source">How applied</label>
+        <div class="selectwrap-f"><select id="f-source"></select></div>
+      </div>
+      <div class="field">
+        <label for="f-fucount">Follow-up count</label>
+        <input id="f-fucount" type="number" min="0" step="1" value="0" />
+      </div>
+      <div class="field">
+        <label for="f-lastfu">Last follow-up</label>
+        <input id="f-lastfu" type="date" />
+      </div>
+      <div class="field">
+        <label for="f-nextfu">Next follow-up</label>
+        <input id="f-nextfu" type="date" />
+      </div>
+      <div class="field">
+        <label for="f-contactname">Contact name</label>
+        <input id="f-contactname" autocomplete="off" placeholder="e.g. Jordan Mills" />
+      </div>
+      <div class="field full">
+        <label for="f-contactinfo">Contact information</label>
+        <input id="f-contactinfo" autocomplete="off" placeholder="Email or phone" />
+      </div>
+      <div class="field full">
+        <label for="f-notes">Notes</label>
+        <textarea id="f-notes" placeholder="Anything worth remembering — referral name, salary range, next steps…"></textarea>
+      </div>
+    </form>
+    <footer>
+      <span class="spacer"></span>
+      <button class="btn" onclick="closeForm()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitForm()"><svg class="ic"><use href="#i-check"/></svg> <span id="saveLabel">Save application</span></button>
+    </footer>
+  </div>
+</div>
+
+<!-- confirm modal -->
+<div class="scrim" id="confirmScrim" aria-hidden="true">
+  <div class="modal confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <header>
+      <h3 id="confirmTitle">Delete application</h3>
+      <button class="iconbtn" onclick="closeConfirm()" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
+    </header>
+    <div class="form">
+      <p id="confirmMsg">This can't be undone.</p>
+    </div>
+    <footer>
+      <span class="spacer"></span>
+      <button class="btn" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-primary" id="confirmOk">Delete</button>
+    </footer>
+  </div>
+</div>
+
+<div class="toast" id="toast"><svg class="ic"><use href="#i-check"/></svg> <span id="toastMsg"></span></div>
+
+<input type="file" id="importFile" accept="application/json" style="display:none" />
+
+  <script src="js/model.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js');
+    }
+  </script>
+</body>
+</html>
