@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
 
@@ -32,8 +32,31 @@
     <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
     <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
   </defs>
 </svg>
+
+<!-- ── Auth screen (shown until signed in) ── -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="mark"></span>
+      <span class="name">Ca<b>dence</b></span>
+    </div>
+    <h2>Track your job search</h2>
+    <p>Sign in with Google to keep your applications synced across every device. Your data is stored in your own Google Drive — nothing on our servers.</p>
+    <div id="authSignInBtn">
+      <button class="btn btn-primary btn-google" onclick="handleSignIn()">
+        <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Sign in with Google
+      </button>
+    </div>
+    <div id="authSpinner" class="auth-spinner" style="display:none">Signing in…</div>
+  </div>
+</div>
+
+<!-- ── App shell (revealed after sign-in) ── -->
+<div id="appShell" hidden>
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -58,12 +81,16 @@
         <svg class="ic"><use href="#i-dots"/></svg>
       </button>
       <div class="menu" id="overflowMenu" role="menu">
-        <button role="menuitem" onclick="closeMenu();shareData()"><svg class="ic"><use href="#i-share"/></svg> Share data</button>
-        <button role="menuitem" onclick="closeMenu();exportData()"><svg class="ic"><use href="#i-down"/></svg> Export data (.json)</button>
+        <div class="user-menu-email" id="userEmail"></div>
+        <div class="sep"></div>
+        <button role="menuitem" onclick="closeMenu();shareData()"><svg class="ic"><use href="#i-share"/></svg> Share / export (.csv)</button>
+        <button role="menuitem" onclick="closeMenu();exportData()"><svg class="ic"><use href="#i-down"/></svg> Backup data (.json)</button>
         <button role="menuitem" onclick="closeMenu();importData()"><svg class="ic"><use href="#i-up"/></svg> Import data (.json)</button>
         <button role="menuitem" onclick="closeMenu();loadSample()"><svg class="ic"><use href="#i-spark"/></svg> Load sample data</button>
         <div class="sep"></div>
         <button role="menuitem" class="danger" onclick="closeMenu();clearAll()"><svg class="ic"><use href="#i-trash"/></svg> Clear all data</button>
+        <div class="sep"></div>
+        <button role="menuitem" onclick="closeMenu();handleSignOut()"><svg class="ic"><use href="#i-logout"/></svg> Sign out</button>
       </div>
     </div>
   </div>
@@ -82,14 +109,12 @@
     <form class="form" id="appForm" novalidate>
       <input type="hidden" id="f-id" />
       <div class="field">
-        <label for="f-company">Company <span class="req">*</span></label>
+        <label for="f-company">Company</label>
         <input id="f-company" autocomplete="off" placeholder="e.g. Northwind" />
-        <span class="err">Add a company name.</span>
       </div>
       <div class="field">
-        <label for="f-role">Role <span class="req">*</span></label>
+        <label for="f-role">Role</label>
         <input id="f-role" autocomplete="off" placeholder="e.g. Product Designer" />
-        <span class="err">Add a role title.</span>
       </div>
       <div class="field">
         <label for="f-location">Location</label>
@@ -106,18 +131,6 @@
       <div class="field">
         <label for="f-source">How applied</label>
         <div class="selectwrap-f"><select id="f-source"></select></div>
-      </div>
-      <div class="field">
-        <label for="f-fucount">Follow-up count</label>
-        <input id="f-fucount" type="number" min="0" step="1" value="0" />
-      </div>
-      <div class="field">
-        <label for="f-lastfu">Last follow-up</label>
-        <input id="f-lastfu" type="date" />
-      </div>
-      <div class="field">
-        <label for="f-nextfu">Next follow-up</label>
-        <input id="f-nextfu" type="date" />
       </div>
       <div class="field">
         <label for="f-contactname">Contact name</label>
@@ -166,13 +179,37 @@
 
 <input type="file" id="importFile" accept="application/json" style="display:none" />
 
-  <script src="js/model.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js');
+</div><!-- /#appShell -->
+
+<!-- Google APIs (load synchronously so gapi/google are available when app scripts run) -->
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
+
+<script src="js/model.js"></script>
+<script src="js/store.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script>
+  /* Boot: all scripts loaded — safe to call render(), initAuth(), etc. */
+  (async () => {
+    try {
+      const tokenRestored = await initAuth();
+      if (!tokenRestored) {
+        if (localStorage.getItem(AUTH_HINT_KEY) === '1') {
+          handleSignIn(); /* token expired — re-auth (instant if Google has consent cached) */
+        } else {
+          _showAuthScreen();
+        }
+      }
+    } catch(e) {
+      console.error('Auth init failed', e);
+      _showAuthScreen();
     }
-  </script>
+  })();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+</script>
 </body>
 </html>
